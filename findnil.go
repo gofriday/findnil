@@ -1,7 +1,6 @@
 package findnil
 
 import (
-	"fmt"
 	"go/types"
 
 	"github.com/gostaticanalysis/analysisutil"
@@ -60,11 +59,25 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 
 		ifinstr := analysisutil.IfInstr(instr.Block().Preds[0])
-		if ifinstr == nil ||
-			ifinstr.Block().Succs[0] != instr.Block() {
-			return  true
+		if ifinstr == nil {
+			return true
 		}
-		fmt.Printf("%T\n", instr)
+
+		thenBlock := ifinstr.Block().Succs[0]
+		if instr.Block() != thenBlock {
+			return true
+		}
+
+		binOp, _ := ifinstr.Cond.(*ssa.BinOp)
+		if binOp == nil {
+			return true
+		}
+		switch {
+		case types.Identical(binOp.X.Type(), errtyp) && isConstNil(binOp.Y):
+			pass.Reportf(instr.Pos(), "NG")
+		case types.Identical(binOp.Y.Type(), errtyp) && isConstNil(binOp.X):
+			pass.Reportf(instr.Pos(), "NG")
+		}
 
 		return true
 	})
